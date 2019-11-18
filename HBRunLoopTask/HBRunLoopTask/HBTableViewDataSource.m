@@ -87,7 +87,7 @@
                 [_imageModels addObject:model];
             }];
         }
-        _taskManager = [HBRunLoopTaskManager permenetThreadTaskManager];
+        _taskManager = [HBRunLoopTaskManager permanentThreadTaskManager];
         _taskManager.maxContainerTaskCount = 10;
         _taskManager.maxExecutionTaskCount = 1;
     }
