@@ -22,7 +22,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) NSUInteger maxExecutionTaskCount;
 
 //常驻线程任务管理
-+ (instancetype)permenetThreadTaskManager;
++ (instancetype)permanentThreadTaskManager;
 
 + (instancetype _Nullable)taskManagerWithRunLoop:(CFRunLoopRef)runLoop
                                      runLoopMode:(CFRunLoopMode)runLoopMode;

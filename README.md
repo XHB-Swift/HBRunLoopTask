@@ -6,7 +6,7 @@
 #import "HBRunLoopTaskManager.h"
 
 //创建一个使用自带常驻线程的RunLoop管理器
-HBRunLoopTaskManager *taskManager = [HBRunLoopTaskManager permenetThreadTaskManager];
+HBRunLoopTaskManager *taskManager = [HBRunLoopTaskManager permanentThreadTaskManager];
 //设置容器的最大任务数，超出的任务会被抛弃
 taskManager.maxContainerTaskCount = 10;
 //设置RunLoop可以执行的最大任务数

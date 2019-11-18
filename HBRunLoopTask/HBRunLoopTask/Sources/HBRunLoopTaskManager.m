@@ -20,10 +20,10 @@
 
 @implementation HBRunLoopTaskManager
 
-+ (instancetype)permenetThreadTaskManager {
++ (instancetype)permanentThreadTaskManager {
     HBRunLoopTaskManager *taskManager = [[HBRunLoopTaskManager alloc] init];
     if (taskManager) {
-        [NSThread detachNewThreadSelector:@selector(permenetThreadAction) toTarget:taskManager withObject:nil];
+        [NSThread detachNewThreadSelector:@selector(permanentThreadAction) toTarget:taskManager withObject:nil];
     }
     return taskManager;
 }
@@ -68,7 +68,7 @@
     return (_runLoop != NULL && CFRunLoopIsWaiting(_runLoop));
 }
 
-- (void)permenetThreadAction {
+- (void)permanentThreadAction {
     NSThread *currentThread = [NSThread currentThread];
     currentThread.name = @"com.xhb.permenet.runloop.thread";
     NSMachPort *permenetMachPort = [[NSMachPort alloc] init];
