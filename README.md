@@ -98,9 +98,8 @@ HBRunLoopTask *task = [HBRunLoopTask runLoopTaskWithTarget:self action:@selector
 
 @interface HBTableViewDataSource ()
 
-@property (nonatomic, strong) NSMutableArray<HBTableViewCellImageModel *> *imageModels;
 @property (nonatomic, strong) HBRunLoopTaskManager *taskManager;
-@property (nonatomic, getter=shouldUpdate) BOOL update;
+@property (nonatomic, strong) NSMutableArray<HBTableViewCellImageModel *> *imageModels;
 
 @end
 
