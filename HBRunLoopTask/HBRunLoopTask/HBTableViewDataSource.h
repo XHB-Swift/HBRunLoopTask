@@ -20,9 +20,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)initWithImageURLs:(NSArray<NSString *> *)imageURLs;
 
-//网络请求单独放在一个线程操作
-- (void)loadNetworkImages;
-
 @end
 
 NS_ASSUME_NONNULL_END

@@ -36,7 +36,6 @@
         self.dataSource.tableView = tableView;
         tableView;
     })];
-    [self.dataSource loadNetworkImages];
 }
 
 

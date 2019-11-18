@@ -70,7 +70,6 @@
 @property (nonatomic, strong) NSMutableArray<HBTableViewCellImageModel *> *imageModels;
 @property (nonatomic, strong) HBRunLoopTaskManager *taskManager;
 @property (nonatomic, getter=shouldUpdate) BOOL update;
-@property (nonatomic, strong) NSURLSession *dataSourceSession;
 
 @end
 
@@ -92,8 +91,6 @@
         _taskManager = [HBRunLoopTaskManager permenetThreadTaskManager];
         _taskManager.maxContainerTaskCount = 10;
         _taskManager.maxExecutionTaskCount = 1;
-        NSURLSessionConfiguration *sessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
-        _dataSourceSession = [NSURLSession sessionWithConfiguration:sessionConfiguration];
     }
     return self;
 }
@@ -113,39 +110,20 @@
     UITableViewCell *cell = nil;
     if (cellIdentifier) {
         cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier forIndexPath:indexPath];
-        if (model.imageData) {
-            if (!model.cachedImage) {
-                HBRunLoopTask *task = [HBRunLoopTask runLoopTaskWithTarget:self action:@selector(runLoopTaskWithObject:) object:model];
-                [self.taskManager addTask:task];
-            }else {
-                cell.imageView.image = model.cachedImage;
-            }
+        if (!model.cachedImage) {
+            HBRunLoopTask *task = [HBRunLoopTask runLoopTaskWithTarget:self action:@selector(runLoopTaskWithObject:) object:model];
+            [self.taskManager addTask:task];
+        }else {
+            cell.imageView.image = model.cachedImage;
         }
     }
     return cell;
 }
 
-- (void)loadNetworkImages {
-    
-    [self.imageModels enumerateObjectsUsingBlock:^(HBTableViewCellImageModel * _Nonnull model, NSUInteger idx, BOOL * _Nonnull stop) {
-        
-        if (model.imageURL) {
-            NSURLSessionDataTask *dataTask = [self.dataSourceSession dataTaskWithURL:model.imageURL completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
-                if (data) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        model.imageData = data;
-                        [self.tableView reloadRowsAtIndexPaths:@[model.indexPath] withRowAnimation:(UITableViewRowAnimationAutomatic)];
-                    });
-                }
-            }];
-            [dataTask resume];
-        }
-    }];
-}
-
-#pragma mark - RunLoop负责解压图片任务
+#pragma mark - RunLoop负责下载以及解压图片任务
 
 - (void)runLoopTaskWithObject:(HBTableViewCellImageModel *)object {
+    object.imageData = [NSData dataWithContentsOfURL:object.imageURL];
     [object decodeImage];
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.tableView reloadRowsAtIndexPaths:@[object.indexPath] withRowAnimation:(UITableViewRowAnimationAutomatic)];
