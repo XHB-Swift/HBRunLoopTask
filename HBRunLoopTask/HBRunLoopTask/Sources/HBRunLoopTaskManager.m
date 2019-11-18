@@ -151,22 +151,23 @@
 - (void)resumeTask:(HBRunLoopTask *)task {
     if (task) {
         [self.taskSet insertObject:task atIndex:0];
-        [task executeInRunLoop:self.runLoop mode:self.runLoopMode];
+        NSUInteger currentCount = self.taskSet.count;
+        if (_maxContainerTaskCount < currentCount) {
+            NSRange overflowRange = (NSRange){_maxContainerTaskCount,currentCount-_maxContainerTaskCount};
+            NSIndexSet *overflowTaskIndex = [NSIndexSet indexSetWithIndexesInRange:overflowRange];
+            NSArray<HBRunLoopTask *> *overflowTasks = [self.taskSet objectsAtIndexes:overflowTaskIndex];
+            [overflowTasks enumerateObjectsUsingBlock:^(HBRunLoopTask * _Nonnull overflowTask, NSUInteger idx, BOOL * _Nonnull stop) {
+                [overflowTask invalidateInRunLoop:self.runLoop mode:self.runLoopMode];
+            }];
+            [self.taskSet removeObjectsInRange:overflowRange];
+        }
+        if ([self isRunLoopWaiting]) {
+            [task executeInRunLoop:self.runLoop mode:self.runLoopMode];
+            CFRunLoopWakeUp(self.runLoop);
+        }
     }
 }
 
-- (void)resumeAllTasks {
-    NSMutableOrderedSet<HBRunLoopTask *> *taskSet = self.taskSet;
-    if (taskSet.count > 0 && [self isRunLoopWaiting]) {
-        CFRunLoopRef runLoop = self.runLoop;
-        CFRunLoopMode runLoopMode = self.runLoopMode;
-        [taskSet enumerateObjectsUsingBlock:^(HBRunLoopTask * _Nonnull task, NSUInteger idx, BOOL * _Nonnull stop) {
-            if (!task.didFinish) {
-                [task executeInRunLoop:runLoop mode:runLoopMode];
-            }
-        }];
-    }
-}
 
 #pragma mark - 私有方法
 

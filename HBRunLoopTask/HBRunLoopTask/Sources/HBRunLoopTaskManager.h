@@ -40,8 +40,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)resumeTask:(HBRunLoopTask *)task;
 
-- (void)resumeAllTasks;
-
 @end
 
 NS_ASSUME_NONNULL_END
