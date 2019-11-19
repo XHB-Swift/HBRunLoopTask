@@ -13,6 +13,7 @@
 
 @property (nonatomic) CFRunLoopRef runLoop;
 @property (nonatomic) CFRunLoopMode runLoopMode;
+@property (nonatomic) CFRunLoopSourceRef holdingRunLoop;
 @property (nonatomic) CFRunLoopObserverRef runLoopObserver;
 @property (nonatomic, strong) NSMutableOrderedSet<HBRunLoopTask *> *taskSet;
 
@@ -24,6 +25,14 @@
     HBRunLoopTaskManager *taskManager = [[HBRunLoopTaskManager alloc] init];
     if (taskManager) {
         [NSThread detachNewThreadSelector:@selector(permanentThreadAction) toTarget:taskManager withObject:nil];
+    }
+    return taskManager;
+}
+
++ (instancetype)controllableThreadTaskManager {
+    HBRunLoopTaskManager *taskManager = [[HBRunLoopTaskManager alloc] init];
+    if (taskManager) {
+        [NSThread detachNewThreadSelector:@selector(controllableThreadAction) toTarget:taskManager withObject:nil];
     }
     return taskManager;
 }
@@ -52,6 +61,7 @@
         _runLoop = NULL;
         _runLoopMode = NULL;
         _runLoopObserver = NULL;
+        _shouldExecuteTaskImmediately = YES;
         _taskSet = [NSMutableOrderedSet orderedSet];
     }
     return self;
@@ -62,64 +72,49 @@
         CFRelease(_runLoopObserver);
         _runLoopObserver = NULL;
     }
-}
-
-- (BOOL)isRunLoopWaiting {
-    return (_runLoop != NULL && CFRunLoopIsWaiting(_runLoop));
-}
-
-- (void)permanentThreadAction {
-    NSThread *currentThread = [NSThread currentThread];
-    currentThread.name = @"com.xhb.permenet.runloop.thread";
-    NSMachPort *permenetMachPort = [[NSMachPort alloc] init];
-    NSRunLoop *permenetRunLoop = [NSRunLoop currentRunLoop];
-    _runLoop = [permenetRunLoop getCFRunLoop];
-    _runLoopMode = kCFRunLoopDefaultMode;
-    [permenetRunLoop addPort:permenetMachPort forMode:(__bridge NSRunLoopMode)_runLoopMode];
-    [self registerRunLoopObserver];
-    [permenetRunLoop run];
+    if (_holdingRunLoop) {
+        CFRelease(_holdingRunLoop);
+        _holdingRunLoop = NULL;
+    }
 }
 
 #pragma mark - 公开方法
 
 - (void)addTask:(HBRunLoopTask *)task {
     if (task) {
-        [self.taskSet addObject:task];
-        NSUInteger currentTaskCount = self.taskSet.count;
+        NSUInteger currentTaskCount = self.taskSet.count + 1;
         if (_maxContainerTaskCount > 0 && currentTaskCount > _maxContainerTaskCount) {
-            HBRunLoopTask *firstTask = self.taskSet.firstObject;
-            [firstTask invalidateInRunLoop:self.runLoop mode:self.runLoopMode];
-            [self.taskSet removeObjectAtIndex:0];
+            HBRunLoopTask *overflowTask = self.taskSet.firstObject;
+            if (overflowTask) {
+                [overflowTask invalidateInRunLoop:self.runLoop mode:self.runLoopMode];
+                [self.taskSet removeObject:overflowTask];
+            }
         }
-        if ([self isRunLoopWaiting]) {
-            //触发一下RunLoop
-            [task executeInRunLoop:self.runLoop mode:self.runLoopMode];
-            CFRunLoopWakeUp(self.runLoop);
+        [self.taskSet addObject:task];
+        if (self.shouldExecuteTaskImmediately) {
+            [self wakeupRunLoop];
         }
     }
 }
 
 - (void)addTasks:(NSArray<HBRunLoopTask *> *)tasks {
-    if (tasks.count > 0) {
+    NSUInteger newTaskCount = tasks.count;
+    if (newTaskCount > 0) {
         [self.taskSet addObjectsFromArray:tasks];
-        NSUInteger newTaskCount = tasks.count;
         NSUInteger currentTaskCount = self.taskSet.count;
         CFRunLoopRef runLoop = self.runLoop;
         CFRunLoopMode runLoopMode = self.runLoopMode;
         if (_maxContainerTaskCount > 0 && currentTaskCount > _maxContainerTaskCount) {
-            [self.taskSet enumerateObjectsUsingBlock:^(HBRunLoopTask * _Nonnull task, NSUInteger idx, BOOL * _Nonnull stop) {
-                if (idx <= newTaskCount - 1) {
-                    [task invalidateInRunLoop:runLoop mode:runLoopMode];
-                    *stop = (idx == currentTaskCount - 1);
-                }
+            NSUInteger overflowLength = currentTaskCount - _maxContainerTaskCount;
+            NSIndexSet *overflowIndexSet = [NSIndexSet indexSetWithIndexesInRange:(NSRange){0,overflowLength}];
+            NSArray<HBRunLoopTask *> *overflowTasks = [self.taskSet objectsAtIndexes:overflowIndexSet];
+            [overflowTasks enumerateObjectsUsingBlock:^(HBRunLoopTask * _Nonnull overflowTask, NSUInteger idx, BOOL * _Nonnull stop) {
+                [overflowTask invalidateInRunLoop:runLoop mode:runLoopMode];
             }];
-            [self.taskSet removeObjectsInRange:(NSRange){0,newTaskCount}];
+            [self.taskSet removeObjectsInArray:overflowTasks];
         }
-        if ([self isRunLoopWaiting]) {
-            [tasks enumerateObjectsUsingBlock:^(HBRunLoopTask * _Nonnull task, NSUInteger idx, BOOL * _Nonnull stop) {
-                [task executeInRunLoop:runLoop mode:runLoopMode];
-            }];
-            CFRunLoopWakeUp(self.runLoop);
+        if (self.shouldExecuteTaskImmediately) {
+            [self wakeupRunLoop];
         }
     }
 }
@@ -148,28 +143,71 @@
     }
 }
 
-- (void)resumeTask:(HBRunLoopTask *)task {
-    if (task) {
-        [self.taskSet insertObject:task atIndex:0];
-        NSUInteger currentCount = self.taskSet.count;
-        if (_maxContainerTaskCount < currentCount) {
-            NSRange overflowRange = (NSRange){_maxContainerTaskCount,currentCount-_maxContainerTaskCount};
-            NSIndexSet *overflowTaskIndex = [NSIndexSet indexSetWithIndexesInRange:overflowRange];
-            NSArray<HBRunLoopTask *> *overflowTasks = [self.taskSet objectsAtIndexes:overflowTaskIndex];
-            [overflowTasks enumerateObjectsUsingBlock:^(HBRunLoopTask * _Nonnull overflowTask, NSUInteger idx, BOOL * _Nonnull stop) {
-                [overflowTask invalidateInRunLoop:self.runLoop mode:self.runLoopMode];
-            }];
-            [self.taskSet removeObjectsInRange:overflowRange];
-        }
-        if ([self isRunLoopWaiting]) {
-            [task executeInRunLoop:self.runLoop mode:self.runLoopMode];
-            CFRunLoopWakeUp(self.runLoop);
+//唤醒等待中的RunLoop
+- (void)wakeupRunLoop {
+    if ([self isRunLoopWaiting]) { //RunLoop正在等待
+        //唤醒RunLoop
+        CFRunLoopWakeUp(self.runLoop);
+    }
+}
+
+#pragma mark - 私有方法
+
+//检测RunLoop是否在等待输入源
+- (BOOL)isRunLoopWaiting {
+    return (_runLoop != NULL && CFRunLoopIsWaiting(_runLoop));
+}
+
+//常驻线程启动RunLoop，App内无法退出该RunLoop
+- (void)permanentThreadAction {
+    NSThread *currentThread = [NSThread currentThread];
+    currentThread.name = @"com.xhb.permenet.runloop.thread";
+    NSMachPort *permanentMachPort = [[NSMachPort alloc] init];
+    NSRunLoop *currentRunLoop = [NSRunLoop currentRunLoop];
+    _runLoop = [currentRunLoop getCFRunLoop];
+    _runLoopMode = kCFRunLoopDefaultMode;
+    [currentRunLoop addPort:permanentMachPort forMode:(__bridge NSRunLoopMode)_runLoopMode];
+    [self registerRunLoopObserver];
+    [currentRunLoop run];
+}
+
+//可控线程使用CFRunLoopSourceRef启动RunLoop
+- (void)controllableThreadAction {
+    NSThread *currentThread = [NSThread currentThread];
+    currentThread.name = @"com.xhb.permenet.runloop.thread";
+    NSRunLoop *currentRunLoop = [NSRunLoop currentRunLoop];
+    _runLoop = [currentRunLoop getCFRunLoop];
+    _runLoopMode = kCFRunLoopDefaultMode;
+    [self registerRunLoopObserver];
+    //创建一个维持RunLoop的Source
+    CFRunLoopSourceContext runLoopSourceCtx = {
+        .version = 0,
+        .info = (__bridge void *)self,
+        .retain = NULL,
+        .release = NULL,
+        .copyDescription = NULL,
+        .hash = NULL,
+        .schedule = NULL,
+        .cancel = NULL,
+        .perform = NULL,
+    };
+    _holdingRunLoop = CFRunLoopSourceCreate(NULL, 0, &runLoopSourceCtx);
+    if (_holdingRunLoop != NULL) {
+        CFRunLoopAddSource(_runLoop, _holdingRunLoop, _runLoopMode);
+        while ([currentRunLoop runMode:(__bridge NSRunLoopMode)_runLoopMode beforeDate:[NSDate distantFuture]]) {
         }
     }
 }
 
-
-#pragma mark - 私有方法
+//退出可控线程的RunLoop
+- (void)exitControllableThread {
+    BOOL canExitRunLoop = _holdingRunLoop && CFRunLoopSourceIsValid(_holdingRunLoop) &&
+                          _runLoop && CFRunLoopContainsSource(_runLoop, _holdingRunLoop, _runLoopMode);
+    if (canExitRunLoop) {
+        CFRunLoopRemoveSource(_runLoop, _holdingRunLoop, _runLoopMode);
+        [self wakeupRunLoop];
+    }
+}
 
 - (void)registerRunLoopObserver {
     CFRunLoopObserverContext runLoopObserverCtx = {

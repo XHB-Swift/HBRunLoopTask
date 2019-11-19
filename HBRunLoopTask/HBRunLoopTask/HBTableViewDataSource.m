@@ -88,6 +88,7 @@
             }];
         }
         _taskManager = [HBRunLoopTaskManager permanentThreadTaskManager];
+        _taskManager.shouldExecuteTaskImmediately = NO;
         _taskManager.maxContainerTaskCount = 10;
         _taskManager.maxExecutionTaskCount = 1;
     }
@@ -117,6 +118,10 @@
         }
     }
     return cell;
+}
+
+- (void)loadNetworkImages {
+    [self.taskManager wakeupRunLoop];
 }
 
 #pragma mark - RunLoop负责下载以及解压图片任务

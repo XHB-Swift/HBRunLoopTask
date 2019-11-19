@@ -21,8 +21,17 @@ NS_ASSUME_NONNULL_BEGIN
 //RunLoop一次可以执行的最大任务数
 @property (nonatomic) NSUInteger maxExecutionTaskCount;
 
+//是否在添加任务之后立即执行，默认YES
+@property (nonatomic) BOOL shouldExecuteTaskImmediately;
+
 //常驻线程任务管理
 + (instancetype)permanentThreadTaskManager;
+
+//可控制线程声明周期的任务管理
++ (instancetype)controllableThreadTaskManager;
+
+//退出可控线程的RunLoop
+- (void)exitControllableThread;
 
 + (instancetype _Nullable)taskManagerWithRunLoop:(CFRunLoopRef)runLoop
                                      runLoopMode:(CFRunLoopMode)runLoopMode;
@@ -38,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)removeAllTasks;
 
-- (void)resumeTask:(HBRunLoopTask *)task;
+- (void)wakeupRunLoop;
 
 @end
 
