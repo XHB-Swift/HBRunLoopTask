@@ -21,6 +21,9 @@ NS_ASSUME_NONNULL_BEGIN
 //RunLoop一次可以执行的最大任务数
 @property (nonatomic) NSUInteger maxExecutionTaskCount;
 
+//当任务数量
+@property (nonatomic, readonly) NSUInteger currentTaskCount;
+
 //是否在添加任务之后立即执行，默认YES
 @property (nonatomic) BOOL shouldExecuteTaskImmediately;
 
@@ -48,6 +51,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)removeAllTasks;
 
 - (void)wakeupRunLoop;
+
+- (BOOL)containsTask:(HBRunLoopTask *)task;
+
+- (BOOL)containsTaskWithIdentifier:(NSString *)identifier;
 
 @end
 

@@ -80,19 +80,43 @@
 
 #pragma mark - 公开方法
 
+- (NSUInteger)currentTaskCount {
+    return _taskSet.count;
+}
+
+- (BOOL)containsTask:(HBRunLoopTask *)task {
+    BOOL flag = NO;
+    if (task) {
+        flag = [self.taskSet containsObject:task];
+    }
+    return flag;
+}
+
+- (BOOL)containsTaskWithIdentifier:(NSString *)identifier {
+    __block BOOL flag = NO;
+    if (identifier) {
+        [self.taskSet enumerateObjectsUsingBlock:^(HBRunLoopTask * _Nonnull task, NSUInteger idx, BOOL * _Nonnull stop) {
+            *stop = flag = [task.identifier isEqualToString:identifier];
+        }];
+    }
+    return flag;
+}
+
 - (void)addTask:(HBRunLoopTask *)task {
     if (task) {
-        NSUInteger currentTaskCount = self.taskSet.count + 1;
-        if (_maxContainerTaskCount > 0 && currentTaskCount > _maxContainerTaskCount) {
-            HBRunLoopTask *overflowTask = self.taskSet.firstObject;
-            if (overflowTask) {
-                [overflowTask invalidateInRunLoop:self.runLoop mode:self.runLoopMode];
-                [self.taskSet removeObject:overflowTask];
+        if (![self containsTask:task]) {
+            NSUInteger currentTaskCount = self.taskSet.count + 1;
+            if (_maxContainerTaskCount > 0 && currentTaskCount > _maxContainerTaskCount) {
+                HBRunLoopTask *overflowTask = self.taskSet.firstObject;
+                if (overflowTask) {
+                    [overflowTask invalidateInRunLoop:self.runLoop mode:self.runLoopMode];
+                    [self.taskSet removeObject:overflowTask];
+                }
             }
-        }
-        [self.taskSet addObject:task];
-        if (self.shouldExecuteTaskImmediately) {
-            [self wakeupRunLoop];
+            [self.taskSet addObject:task];
+            if (self.shouldExecuteTaskImmediately) {
+                [self wakeupRunLoop];
+            }
         }
     }
 }

@@ -81,6 +81,40 @@
     return self;
 }
 
+//判断两个Task是否相等的关键点：对象地址，task标识，CFRunLoopSourceRef
+- (BOOL)isEqual:(id)object {
+    BOOL equal = (self == object);
+    if (!equal) {
+        if ([object isKindOfClass:[HBRunLoopTask class]]) {
+            equal = [self isEqualToTask:object];
+        }
+    }
+    return equal;
+}
+
+- (BOOL)isEqualToTask:(HBRunLoopTask *)task {
+    BOOL equal = NO;
+    if (task) {
+        equal = (_runLoopSource == task.runLoopSource);
+        if (!equal && task.identifier) {
+            equal = [_identifier isEqualToString:task.identifier];
+        }
+    }
+    return equal;
+}
+
+//重写哈希值
+- (NSUInteger)hash {
+    id runLoopSource = (__bridge id)_runLoopSource;
+    NSUInteger h = [runLoopSource hash];
+    if (_identifier) {
+        NSUInteger identifierHash = [_identifier hash];
+        //不能写成 h ^ identifierHash，当标识符不为空要以标识符为优先级区分Task
+        h = identifierHash ^ h;
+    }
+    return h;
+}
+
 - (void)dealloc {
     if (_runLoopSource) {
         CFRelease(_runLoopSource);

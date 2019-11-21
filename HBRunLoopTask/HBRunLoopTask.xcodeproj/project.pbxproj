@@ -16,6 +16,8 @@
 		C69BCD8E237BF48F005F6703 /* HBRunLoopTask.m in Sources */ = {isa = PBXBuildFile; fileRef = C69BCD8D237BF48F005F6703 /* HBRunLoopTask.m */; };
 		C69BCD91237BFFAF005F6703 /* HBRunLoopTaskManager.m in Sources */ = {isa = PBXBuildFile; fileRef = C69BCD90237BFFAF005F6703 /* HBRunLoopTaskManager.m */; };
 		C6E0E01A237E8AE1005E6B21 /* HBTableViewDataSource.m in Sources */ = {isa = PBXBuildFile; fileRef = C6E0E019237E8AE1005E6B21 /* HBTableViewDataSource.m */; };
+		C6E0E01D23863FB4005E6B21 /* HBCollectionViewDataSource.m in Sources */ = {isa = PBXBuildFile; fileRef = C6E0E01C23863FB4005E6B21 /* HBCollectionViewDataSource.m */; };
+		C6E0E02023864035005E6B21 /* HBImageModel.m in Sources */ = {isa = PBXBuildFile; fileRef = C6E0E01F23864035005E6B21 /* HBImageModel.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +37,10 @@
 		C69BCD90237BFFAF005F6703 /* HBRunLoopTaskManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HBRunLoopTaskManager.m; sourceTree = "<group>"; };
 		C6E0E018237E8AE1005E6B21 /* HBTableViewDataSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HBTableViewDataSource.h; sourceTree = "<group>"; };
 		C6E0E019237E8AE1005E6B21 /* HBTableViewDataSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HBTableViewDataSource.m; sourceTree = "<group>"; };
+		C6E0E01B23863FB4005E6B21 /* HBCollectionViewDataSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HBCollectionViewDataSource.h; sourceTree = "<group>"; };
+		C6E0E01C23863FB4005E6B21 /* HBCollectionViewDataSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HBCollectionViewDataSource.m; sourceTree = "<group>"; };
+		C6E0E01E23864035005E6B21 /* HBImageModel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HBImageModel.h; sourceTree = "<group>"; };
+		C6E0E01F23864035005E6B21 /* HBImageModel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HBImageModel.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,8 +83,12 @@
 				C69BCD7F237BF40C005F6703 /* LaunchScreen.storyboard */,
 				C69BCD82237BF40C005F6703 /* Info.plist */,
 				C69BCD83237BF40C005F6703 /* main.m */,
+				C6E0E01E23864035005E6B21 /* HBImageModel.h */,
+				C6E0E01F23864035005E6B21 /* HBImageModel.m */,
 				C6E0E018237E8AE1005E6B21 /* HBTableViewDataSource.h */,
 				C6E0E019237E8AE1005E6B21 /* HBTableViewDataSource.m */,
+				C6E0E01B23863FB4005E6B21 /* HBCollectionViewDataSource.h */,
+				C6E0E01C23863FB4005E6B21 /* HBCollectionViewDataSource.m */,
 			);
 			path = HBRunLoopTask;
 			sourceTree = "<group>";
@@ -166,10 +176,12 @@
 			files = (
 				C69BCD79237BF40B005F6703 /* ViewController.m in Sources */,
 				C69BCD73237BF40B005F6703 /* AppDelegate.m in Sources */,
+				C6E0E01D23863FB4005E6B21 /* HBCollectionViewDataSource.m in Sources */,
 				C6E0E01A237E8AE1005E6B21 /* HBTableViewDataSource.m in Sources */,
 				C69BCD8E237BF48F005F6703 /* HBRunLoopTask.m in Sources */,
 				C69BCD84237BF40C005F6703 /* main.m in Sources */,
 				C69BCD91237BFFAF005F6703 /* HBRunLoopTaskManager.m in Sources */,
+				C6E0E02023864035005E6B21 /* HBImageModel.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
