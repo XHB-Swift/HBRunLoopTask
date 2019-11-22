@@ -8,63 +8,50 @@
 
 #import "HBCollectionViewDataSource.h"
 #import "HBRunLoopTask.h"
-#import "HBRunLoopTaskManager.h"
+#import "HBRunLoopTaskThread.h"
 #import "HBImageModel.h"
 
 
 @implementation HBImageCollectionViewCell
 
-- (instancetype)initWithFrame:(CGRect)frame {
-    if (self = [super initWithFrame:frame]) {
-        CGRect rect = self.contentView.bounds;
-        UIImageView *imageView = [[UIImageView alloc] initWithFrame:rect];
-        imageView.tag = 10903;
-        [self.contentView addSubview:imageView];
-    }
-    return self;
-}
-
 - (void)setImage:(UIImage *)image {
-    UIImageView *imageView = [self.contentView viewWithTag:10903];
-    imageView.image = image;
-    if (CGRectEqualToRect(imageView.frame, CGRectZero)) {
-        imageView.frame = self.contentView.bounds;
-    }
-}
-
-- (UIImage *)image {
-    UIImageView *imageView = [self.contentView viewWithTag:10903];
-    return imageView.image;
+    self.contentView.layer.contents = (id)image.CGImage;
 }
 
 @end
 
 @interface HBCollectionViewDataSource ()
 
-@property (nonatomic, strong) HBRunLoopTaskManager *taskManager;
+@property (nonatomic, weak) UICollectionView *collectionView;
+@property (nonatomic, strong) HBRunLoopTaskThread *taskManager;
 @property (nonatomic, strong) NSMutableArray<HBImageModel *> *imageModels;
 
 @end
 
 @implementation HBCollectionViewDataSource
 
-+ (instancetype)dataSourceWithImageURLs:(NSArray<NSString *> *)imageURLs {
-    return [[self alloc] initWithImageURLs:imageURLs];
++ (instancetype)dataSourceWithImageURLs:(NSArray<NSString *> *)imageURLs collectionView:(UICollectionView *)collectionView {
+    return [[HBCollectionViewDataSource alloc] initWithImageURLs:imageURLs collectionView:collectionView];
 }
 
-- (instancetype)initWithImageURLs:(NSArray<NSString *> *)imageURLs {
+- (instancetype)initWithImageURLs:(NSArray<NSString *> *)imageURLs collectionView:(UICollectionView *)collectionView {
     if (self = [super init]) {
+        collectionView.dataSource = self;
+        collectionView.delegate = self;
+        _collectionView = collectionView;
+        UICollectionViewFlowLayout *flowlayout = (UICollectionViewFlowLayout *)collectionView.collectionViewLayout;
+        CGSize itemSize = flowlayout.itemSize;
         _imageModels = [NSMutableArray array];
-        if (imageURLs) {
-            [imageURLs enumerateObjectsUsingBlock:^(NSString * _Nonnull url, NSUInteger idx, BOOL * _Nonnull stop) {
-                HBImageModel *model = [HBImageModel imageModelWithImageURL:url];
-                [_imageModels addObject:model];
-            }];
-        }
-        _taskManager = [HBRunLoopTaskManager permanentThreadTaskManager];
-        _taskManager.shouldExecuteTaskImmediately = YES;
-        _taskManager.maxContainerTaskCount = 10;
-        _taskManager.maxExecutionTaskCount = 1;
+       if (imageURLs) {
+           [imageURLs enumerateObjectsUsingBlock:^(NSString * _Nonnull url, NSUInteger idx, BOOL * _Nonnull stop) {
+               HBImageModel *model = [HBImageModel imageModelWithImageURL:url thumbnailImageSize:itemSize];
+               [_imageModels addObject:model];
+           }];
+       }
+       _taskManager = [HBRunLoopTaskThread runLoopTaskThread];
+       _taskManager.shouldExecuteTaskImmediately = YES;
+       _taskManager.maxContainerTaskCount = 10;
+       _taskManager.maxExecutionTaskCount = 1;
     }
     return self;
 }
@@ -82,45 +69,35 @@
     NSString *identifier = self.cellIdentifiers.firstObject;
     HBImageCollectionViewCell *cell = nil;
     HBImageModel *model = self.imageModels[indexPath.item];
+    model.indexPath = indexPath;
     if (identifier) {
         cell = [collectionView dequeueReusableCellWithReuseIdentifier:identifier forIndexPath:indexPath];
-        cell.image = model.cachedImage;
+        if (!model.thumbnailImage) {
+            //添加一个下载图片解压缩图片任务
+            NSString *taskIdentifier = [NSString stringWithFormat:@"%@-decode",indexPath];
+            HBRunLoopTask *task = [HBRunLoopTask runLoopTaskWithIdentifier:taskIdentifier target:self action:@selector(runLoopDownloadAndDecodeImageAction:) object:model];
+            [self.taskManager addTask:task];
+        }else {
+            cell.image = model.thumbnailImage;
+        }
     }
     return cell;
 }
 
-- (void)runLoopDownLoadImageAction:(HBImageModel *)model {
-    if (!model.imageData) {
-        model.imageData = [NSData dataWithContentsOfURL:model.imageURL];
-    }
-}
-
-- (void)runLoopDecodeImageAction:(HBImageModel *)model {
+- (void)runLoopDownloadAndDecodeImageAction:(HBImageModel *)model {
     if (!model.cachedImage) {
+        if (!model.imageData) {
+            model.imageData = [NSData dataWithContentsOfURL:model.imageURL];
+        }
         [model decodeImage];
+        [model createThumbnailImageIfNeeded];
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.collectionView performBatchUpdates:^{
                 NSArray<NSIndexPath *> *reloadIndexPaths = @[model.indexPath];
                 [self.collectionView reloadItemsAtIndexPaths:reloadIndexPaths];
-                UICollectionViewFlowLayoutInvalidationContext *invalidateCtx = [[UICollectionViewFlowLayoutInvalidationContext alloc] init];
-                [invalidateCtx invalidateItemsAtIndexPaths:reloadIndexPaths];
-                [self.collectionView.collectionViewLayout invalidateLayoutWithContext:invalidateCtx];
             } completion:nil];
         });
     }
-}
-
-- (CGSize)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)collectionViewLayout sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
-    HBImageModel *model = self.imageModels[indexPath.item];
-    model.indexPath = indexPath;
-    if (CGSizeEqualToSize(model.imageSize, CGSizeZero)) {
-        //添加一个下载图片的任务
-        HBRunLoopTask *downloadTask = [HBRunLoopTask runLoopTaskWithIdentifier:[NSString stringWithFormat:@"%@-download",indexPath] target:self action:@selector(runLoopDownLoadImageAction:) object:model];
-        //添加一个解压缩图片任务
-        HBRunLoopTask *decodeTask = [HBRunLoopTask runLoopTaskWithIdentifier:[NSString stringWithFormat:@"%@-decode",indexPath] target:self action:@selector(runLoopDecodeImageAction:) object:model];
-        [self.taskManager addTasks:@[downloadTask,decodeTask]];
-    }
-    return model.imageSize;
 }
 
 @end

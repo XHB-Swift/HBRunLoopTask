@@ -14,13 +14,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, strong) NSIndexPath *indexPath;
 @property (nonatomic, readonly) CGSize imageSize;
+@property (nonatomic, readonly) CGSize thumbnailImageSize;
 @property (nonatomic, readonly, copy) NSURL *imageURL;
 @property (nonatomic, nullable, copy) NSData *imageData;
-@property (nonatomic, nullable, copy, readonly) UIImage *cachedImage;
+@property (nonatomic, nullable, strong, readonly) UIImage *cachedImage;
+@property (nonatomic, nullable, strong, readonly) UIImage *thumbnailImage;
 
 + (instancetype _Nullable)imageModelWithImageURL:(NSString *)imageURL;
 
++ (instancetype _Nullable)imageModelWithImageURL:(NSString *)imageURL thumbnailImageSize:(CGSize)thumbnailImageSize;
+
 - (void)decodeImage;
+
+- (void)createThumbnailImageIfNeeded;
 
 @end
 

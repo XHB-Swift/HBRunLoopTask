@@ -1,8 +1,8 @@
 //
-//  HBRunLoopTaskManager.h
+//  HBRunLoopTaskThread.h
 //  HBRunLoopTask
 //
-//  Created by 谢鸿标 on 2019/11/13.
+//  Created by 谢鸿标 on 2019/11/22.
 //  Copyright © 2019 谢鸿标. All rights reserved.
 //
 
@@ -12,13 +12,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class HBRunLoopTask;
 
-//一个在RunLoop中管理串行任务的类
-@interface HBRunLoopTaskManager : NSObject
+@interface HBRunLoopTaskThread : NSThread
 
-//容器队列中最大任务数
+//容器队列中最大任务数，默认5
 @property (nonatomic) NSUInteger maxContainerTaskCount;
 
-//RunLoop一次可以执行的最大任务数
+//RunLoop一次可以执行的最大任务数，默认1
 @property (nonatomic) NSUInteger maxExecutionTaskCount;
 
 //当任务数量
@@ -27,20 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 //是否在添加任务之后立即执行，默认YES
 @property (nonatomic) BOOL shouldExecuteTaskImmediately;
 
-//常驻线程任务管理
-+ (instancetype)permanentThreadTaskManager;
-
-//可控制线程声明周期的任务管理
-+ (instancetype)controllableThreadTaskManager;
-
-//退出可控线程的RunLoop
-- (void)exitControllableThread;
-
-+ (instancetype _Nullable)taskManagerWithRunLoop:(CFRunLoopRef)runLoop
-                                     runLoopMode:(CFRunLoopMode)runLoopMode;
-
-- (instancetype _Nullable)initWithRunLoop:(CFRunLoopRef)runLoop
-                              runLoopMode:(CFRunLoopMode)runLoopMode;
++ (instancetype)runLoopTaskThread;
 
 - (void)addTask:(HBRunLoopTask *)task;
 
@@ -50,11 +36,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)removeAllTasks;
 
+//唤醒线程RunLoop
 - (void)wakeupRunLoop;
 
 - (BOOL)containsTask:(HBRunLoopTask *)task;
 
 - (BOOL)containsTaskWithIdentifier:(NSString *)identifier;
+
+//退出RunLoop
+- (void)exitRunLoopThread;
 
 @end
 

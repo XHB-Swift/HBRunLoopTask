@@ -1,15 +1,15 @@
 //
-//  HBRunLoopTaskManager.m
+//  HBRunLoopTaskThread.m
 //  HBRunLoopTask
 //
-//  Created by 谢鸿标 on 2019/11/13.
+//  Created by 谢鸿标 on 2019/11/22.
 //  Copyright © 2019 谢鸿标. All rights reserved.
 //
 
-#import "HBRunLoopTaskManager.h"
+#import "HBRunLoopTaskThread.h"
 #import "HBRunLoopTask.h"
 
-@interface HBRunLoopTaskManager ()
+@interface HBRunLoopTaskThread ()
 
 @property (nonatomic) CFRunLoopRef runLoop;
 @property (nonatomic) CFRunLoopMode runLoopMode;
@@ -19,43 +19,17 @@
 
 @end
 
-@implementation HBRunLoopTaskManager
+@implementation HBRunLoopTaskThread
 
-+ (instancetype)permanentThreadTaskManager {
-    HBRunLoopTaskManager *taskManager = [[HBRunLoopTaskManager alloc] init];
-    if (taskManager) {
-        [NSThread detachNewThreadSelector:@selector(permanentThreadAction) toTarget:taskManager withObject:nil];
-    }
-    return taskManager;
-}
-
-+ (instancetype)controllableThreadTaskManager {
-    HBRunLoopTaskManager *taskManager = [[HBRunLoopTaskManager alloc] init];
-    if (taskManager) {
-        [NSThread detachNewThreadSelector:@selector(controllableThreadAction) toTarget:taskManager withObject:nil];
-    }
-    return taskManager;
-}
-
-+ (instancetype _Nullable)taskManagerWithRunLoop:(CFRunLoopRef)runLoop
-                                     runLoopMode:(CFRunLoopMode)runLoopMode {
-    return [[self alloc] initWithRunLoop:runLoop runLoopMode:runLoopMode];
-}
-
-- (instancetype _Nullable)initWithRunLoop:(CFRunLoopRef)runLoop runLoopMode:(CFRunLoopMode)runLoopMode {
-    if (runLoop != NULL && runLoopMode != NULL) {
-        if (self = [self init]) {
-            _runLoop = runLoop;
-            _runLoopMode = runLoopMode;
-            [self registerRunLoopObserver];
-        }
-        return self;
-    }
-    return nil;
++ (instancetype)runLoopTaskThread {
+    HBRunLoopTaskThread *thread = [[HBRunLoopTaskThread alloc] init];
+    [thread start];
+    return thread;
 }
 
 - (instancetype)init {
     if (self = [super init]) {
+        self.name = @"com.xhb.runloop.task.thread";
         _maxContainerTaskCount = 5;
         _maxExecutionTaskCount = 1;
         _runLoop = NULL;
@@ -177,28 +151,7 @@
 
 #pragma mark - 私有方法
 
-//检测RunLoop是否在等待输入源
-- (BOOL)isRunLoopWaiting {
-    return (_runLoop != NULL && CFRunLoopIsWaiting(_runLoop));
-}
-
-//常驻线程启动RunLoop，App内无法退出该RunLoop
-- (void)permanentThreadAction {
-    NSThread *currentThread = [NSThread currentThread];
-    currentThread.name = @"com.xhb.permenet.runloop.thread";
-    NSMachPort *permanentMachPort = [[NSMachPort alloc] init];
-    NSRunLoop *currentRunLoop = [NSRunLoop currentRunLoop];
-    _runLoop = [currentRunLoop getCFRunLoop];
-    _runLoopMode = kCFRunLoopDefaultMode;
-    [currentRunLoop addPort:permanentMachPort forMode:(__bridge NSRunLoopMode)_runLoopMode];
-    [self registerRunLoopObserver];
-    [currentRunLoop run];
-}
-
-//可控线程使用CFRunLoopSourceRef启动RunLoop
-- (void)controllableThreadAction {
-    NSThread *currentThread = [NSThread currentThread];
-    currentThread.name = @"com.xhb.permenet.runloop.thread";
+- (void)main {
     NSRunLoop *currentRunLoop = [NSRunLoop currentRunLoop];
     _runLoop = [currentRunLoop getCFRunLoop];
     _runLoopMode = kCFRunLoopDefaultMode;
@@ -223,14 +176,19 @@
     }
 }
 
-//退出可控线程的RunLoop
-- (void)exitControllableThread {
+- (void)exitRunLoopThread {
     BOOL canExitRunLoop = _holdingRunLoop && CFRunLoopSourceIsValid(_holdingRunLoop) &&
                           _runLoop && CFRunLoopContainsSource(_runLoop, _holdingRunLoop, _runLoopMode);
     if (canExitRunLoop) {
+        [self removeAllTasks];
         CFRunLoopRemoveSource(_runLoop, _holdingRunLoop, _runLoopMode);
         [self wakeupRunLoop];
     }
+}
+
+//检测RunLoop是否在等待输入源
+- (BOOL)isRunLoopWaiting {
+    return (_runLoop != NULL && CFRunLoopIsWaiting(_runLoop));
 }
 
 - (void)registerRunLoopObserver {
@@ -290,8 +248,9 @@
 
 static inline void HBRunLoopTaskManagerObserve(CFRunLoopObserverRef observer, CFRunLoopActivity activity, void *info) {
     if (activity != kCFRunLoopBeforeWaiting) { return; }
-    HBRunLoopTaskManager *manager = (__bridge HBRunLoopTaskManager *)info;
-    [manager runLoopExecutesTasks];
+    HBRunLoopTaskThread *thread = (__bridge HBRunLoopTaskThread *)info;
+    [thread runLoopExecutesTasks];
 }
+
 
 @end

@@ -12,20 +12,18 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface HBImageCollectionViewCell : UICollectionViewCell
 
-@property (nonatomic, nullable, strong) UIImage *image;
+- (void)setImage:(UIImage *)image;
 
 @end
 
 
 @interface HBCollectionViewDataSource : NSObject <UICollectionViewDataSource, UICollectionViewDelegateFlowLayout>
 
-@property (nonatomic, weak) UICollectionView *collectionView;
-
 @property (nonatomic, copy) NSArray<NSString *> *cellIdentifiers;
 
-+ (instancetype)dataSourceWithImageURLs:(NSArray<NSString *> *)imageURLs;
++ (instancetype)dataSourceWithImageURLs:(NSArray<NSString *> *)imageURLs collectionView:(UICollectionView *)collectionView;
 
-- (instancetype)initWithImageURLs:(NSArray<NSString *> *)imageURLs;
+- (instancetype)initWithImageURLs:(NSArray<NSString *> *)imageURLs collectionView:(UICollectionView *)collectionView;
 
 @end
 

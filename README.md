@@ -3,10 +3,10 @@
 ## Usage
 ``` Objective-C
 #import "HBRunLoopTask.h"
-#import "HBRunLoopTaskManager.h"
+#import "HBRunLoopTaskThread.h"
 
-//创建一个使用自带常驻线程的RunLoop管理器
-HBRunLoopTaskManager *taskManager = [HBRunLoopTaskManager permanentThreadTaskManager];
+//创建一个RunLoop任务线程
+HBRunLoopTaskThread *taskManager = [HBRunLoopTaskThread runLoopTaskThread];
 //设置容器的最大任务数，超出的任务会被抛弃
 taskManager.maxContainerTaskCount = 10;
 //设置RunLoop可以执行的最大任务数
@@ -23,31 +23,54 @@ HBRunLoopTask *task = [HBRunLoopTask runLoopTaskWithTarget:self action:@selector
 ``` Objective-C
 
 //图片模型
-@interface HBTableViewCellImageModel : NSObject
+@interface HBImageModel : NSObject
 
 @property (nonatomic, strong) NSIndexPath *indexPath;
+@property (nonatomic, readonly) CGSize imageSize;
+@property (nonatomic, readonly) CGSize thumbnailImageSize;
 @property (nonatomic, readonly, copy) NSURL *imageURL;
 @property (nonatomic, nullable, copy) NSData *imageData;
-@property (nonatomic, nullable, copy, readonly) UIImage *cachedImage;
+@property (nonatomic, nullable, strong, readonly) UIImage *cachedImage;
+@property (nonatomic, nullable, strong, readonly) UIImage *thumbnailImage;
 
-+ (instancetype)imageModelWithImageURL:(NSString *)imageURL;
++ (instancetype _Nullable)imageModelWithImageURL:(NSString *)imageURL;
+
++ (instancetype _Nullable)imageModelWithImageURL:(NSString *)imageURL thumbnailImageSize:(CGSize)thumbnailImageSize;
+
+- (void)decodeImage;
+
+- (void)createThumbnailImageIfNeeded;
 
 @end
 
-@implementation HBTableViewCellImageModel
+@implementation HBImageModel
 
-+ (instancetype)imageModelWithImageURL:(NSString *)imageURL {
++ (instancetype _Nullable)imageModelWithImageURL:(NSString *)imageURL {
     if (imageURL) {
         NSURL *URL = [NSURL URLWithString:imageURL];
-        return [[HBTableViewCellImageModel alloc] initWithImageURL:URL];
+        return [[HBImageModel alloc] initWithImageURL:URL];
     }else {
         return nil;
     }
 }
 
 - (instancetype)initWithImageURL:(NSURL *)imageURL {
+    return [self initWithImageURL:imageURL thumbnailImageSize:(CGSize){150,150}];
+}
+
++ (instancetype _Nullable)imageModelWithImageURL:(NSString *)imageURL thumbnailImageSize:(CGSize)thumbnailImageSize {
+    if (imageURL) {
+        NSURL *URL = [NSURL URLWithString:imageURL];
+        return [[HBImageModel alloc] initWithImageURL:URL thumbnailImageSize:thumbnailImageSize];
+    }else {
+        return nil;
+    }
+}
+
+- (instancetype)initWithImageURL:(NSURL *)imageURL thumbnailImageSize:(CGSize)thumbnailImageSize {
     if (self = [super init]) {
         _imageURL = [imageURL copy];
+        _thumbnailImageSize = CGSizeEqualToSize(thumbnailImageSize, CGSizeZero) ? (CGSize){150,150} : thumbnailImageSize;
     }
     return self;
 }
@@ -56,128 +79,154 @@ HBRunLoopTask *task = [HBRunLoopTask runLoopTaskWithTarget:self action:@selector
     if (!_cachedImage) {
         if (_imageData) {
             UIImage *originalImage = [UIImage imageWithData:_imageData];
-            CGImageRef imageRef = originalImage.CGImage;
-            size_t width = CGImageGetWidth(imageRef);
-            size_t height = CGImageGetHeight(imageRef);
-            CGColorSpaceRef colorSpace = CGImageGetColorSpace(imageRef);
-            size_t bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
-            size_t bitsPerPixel = CGImageGetBitsPerPixel(imageRef);
-            size_t bytesPerRow = CGImageGetBytesPerRow(imageRef);
-            CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(imageRef);
-            CGDataProviderRef dataProvider = CGImageGetDataProvider(imageRef);
-            CFDataRef data = CGDataProviderCopyData(dataProvider);
-            CGDataProviderRef newDataProvider = CGDataProviderCreateWithCFData(data);
-            CFRelease(data);
-            CGImageRef newImageRef = CGImageCreate(width, height, bitsPerComponent, bitsPerPixel, bytesPerRow, colorSpace, bitmapInfo, newDataProvider, NULL, false, kCGRenderingIntentDefault);
-            CFRelease(newDataProvider);
-            _cachedImage = [[UIImage alloc] initWithCGImage:newImageRef];
-            CGImageRelease(newImageRef);
+            _imageSize = originalImage.size;
+            UIGraphicsBeginImageContextWithOptions(_imageSize, NO, 0);
+            CGContextRef context = UIGraphicsGetCurrentContext();
+            UIBezierPath *cornerPath = [UIBezierPath bezierPathWithRoundedRect:(CGRect){CGPointZero,_imageSize} cornerRadius:10];
+            [cornerPath addClip];
+            CGContextDrawPath(context, kCGPathFillStroke);
+            [originalImage drawInRect:(CGRect){CGPointZero,_imageSize}];
+            CGImageRef imageRef = CGBitmapContextCreateImage(context);
+            _cachedImage = [UIImage imageWithCGImage:imageRef];
+            CGImageRelease(imageRef);
+            UIGraphicsEndImageContext();
         }
     }
 }
 
+- (void)createThumbnailImageIfNeeded {
+    if (!_thumbnailImage && _cachedImage) {
+        CGSize adjustThumbnailSize = (_imageSize.width > _thumbnailImageSize.width &&
+                                      _imageSize.height > _thumbnailImageSize.height) ? _thumbnailImageSize : _imageSize;
+        CGRect thumbnailImageRect = (CGRect){CGPointZero,adjustThumbnailSize};
+        CGImageRef cacheImageRef = _cachedImage.CGImage;
+        CGColorSpaceRef colorSpaceRef = CGColorSpaceCreateDeviceRGB();
+        CGContextRef ctx = CGBitmapContextCreate(NULL, adjustThumbnailSize.width, adjustThumbnailSize.height, 8, adjustThumbnailSize.width * 4, colorSpaceRef, (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
+        CGColorSpaceRelease(colorSpaceRef);
+        CGContextSetFillColorWithColor(ctx, [[UIColor clearColor] CGColor]);
+        CGContextFillRect(ctx, thumbnailImageRect);
+        CGContextDrawImage(ctx, thumbnailImageRect, cacheImageRef);
+        CGImageRef newImageRef = CGBitmapContextCreateImage(ctx);
+        CGContextRelease(ctx);
+        _thumbnailImage = [UIImage imageWithCGImage:newImageRef];
+        CGImageRelease(newImageRef);
+    }
+}
 @end
 
 ```
 
-2、列表数据源对象
+2、自定义UICollectionViewCell以及列表数据源对象
 
 ```Objective-C
 
-@interface HBTableViewDataSource : NSObject <UITableViewDataSource>
+#pragmark - 自定义UICollectionViewCell
+
+@interface HBImageCollectionViewCell : UICollectionViewCell
+
+- (void)setImage:(UIImage *)image;
+
+@end
+
+@implementation HBImageCollectionViewCell
+
+- (void)setImage:(UIImage *)image {
+    self.contentView.layer.contents = (id)image.CGImage;
+}
+
+@end
+
+#pragmark - 数据源对象
+
+@interface HBCollectionViewDataSource : NSObject <UICollectionViewDataSource, UICollectionViewDelegateFlowLayout>
 
 @property (nonatomic, copy) NSArray<NSString *> *cellIdentifiers;
 
-@property (nonatomic, weak) UITableView *tableView;
++ (instancetype)dataSourceWithImageURLs:(NSArray<NSString *> *)imageURLs collectionView:(UICollectionView *)collectionView;
 
-+ (instancetype)dataSourceWithImageURLs:(NSArray<NSString *> *)imageURLs;
-
-- (instancetype)initWithImageURLs:(NSArray<NSString *> *)imageURLs;
+- (instancetype)initWithImageURLs:(NSArray<NSString *> *)imageURLs collectionView:(UICollectionView *)collectionView;
 
 @end
 
-@interface HBTableViewDataSource ()
+@interface HBCollectionViewDataSource ()
 
-@property (nonatomic, strong) HBRunLoopTaskManager *taskManager;
-@property (nonatomic, strong) NSMutableArray<HBTableViewCellImageModel *> *imageModels;
+@property (nonatomic, weak) UICollectionView *collectionView;
+@property (nonatomic, strong) HBRunLoopTaskThread *taskManager;
+@property (nonatomic, strong) NSMutableArray<HBImageModel *> *imageModels;
 
 @end
 
-@implementation HBTableViewDataSource
+@implementation HBCollectionViewDataSource
 
-+ (instancetype)dataSourceWithImageURLs:(NSArray<NSString *> *)imageURLs {
-    return [[self alloc] initWithImageURLs:imageURLs];
++ (instancetype)dataSourceWithImageURLs:(NSArray<NSString *> *)imageURLs collectionView:(UICollectionView *)collectionView {
+    return [[HBCollectionViewDataSource alloc] initWithImageURLs:imageURLs collectionView:collectionView];
 }
 
-- (instancetype)initWithImageURLs:(NSArray<NSString *> *)imageURLs {
+- (instancetype)initWithImageURLs:(NSArray<NSString *> *)imageURLs collectionView:(UICollectionView *)collectionView {
     if (self = [super init]) {
+        collectionView.dataSource = self;
+        collectionView.delegate = self;
+        _collectionView = collectionView;
+        UICollectionViewFlowLayout *flowlayout = (UICollectionViewFlowLayout *)collectionView.collectionViewLayout;
         _imageModels = [NSMutableArray array];
-        if (imageURLs) {
-            [imageURLs enumerateObjectsUsingBlock:^(NSString * _Nonnull url, NSUInteger idx, BOOL * _Nonnull stop) {
-                HBTableViewCellImageModel *model = [HBTableViewCellImageModel imageModelWithImageURL:url];
-                [_imageModels addObject:model];
-            }];
-        }
-        _taskManager = [HBRunLoopTaskManager permenetThreadTaskManager];
-        _taskManager.maxContainerTaskCount = 10;
-        _taskManager.maxExecutionTaskCount = 1;
+       if (imageURLs) {
+           [imageURLs enumerateObjectsUsingBlock:^(NSString * _Nonnull url, NSUInteger idx, BOOL * _Nonnull stop) {
+               HBImageModel *model = [HBImageModel imageModelWithImageURL:url thumbnailImageSize:flowlayout.itemSize];
+               [_imageModels addObject:model];
+           }];
+       }
+       _taskManager = [HBRunLoopTaskThread runLoopTaskThread];
+       _taskManager.shouldExecuteTaskImmediately = YES;
+       _taskManager.maxContainerTaskCount = 10;
+       _taskManager.maxExecutionTaskCount = 1;
     }
     return self;
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+- (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView {
     return 1;
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+- (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {
     return self.imageModels.count;
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    NSString *cellIdentifier = self.cellIdentifiers.firstObject;
-    HBTableViewCellImageModel *model = self.imageModels[indexPath.row];
+- (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
+    
+    NSString *identifier = self.cellIdentifiers.firstObject;
+    HBImageCollectionViewCell *cell = nil;
+    HBImageModel *model = self.imageModels[indexPath.item];
     model.indexPath = indexPath;
-    UITableViewCell *cell = nil;
-    if (cellIdentifier) {
-        cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier forIndexPath:indexPath];
-        if (model.imageData) {
-            if (!model.cachedImage) {
-                HBRunLoopTask *task = [HBRunLoopTask runLoopTaskWithTarget:self action:@selector(runLoopTaskWithObject:) object:model];
-                [self.taskManager addTask:task];
-            }else {
-                cell.imageView.image = model.cachedImage;
-            }
-        }
-    }
-    return cell;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    NSString *cellIdentifier = self.cellIdentifiers.firstObject;
-    HBTableViewCellImageModel *model = self.imageModels[indexPath.row];
-    model.indexPath = indexPath;
-    UITableViewCell *cell = nil;
-    if (cellIdentifier) {
-        cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier forIndexPath:indexPath];
-        if (!model.cachedImage) {
-            HBRunLoopTask *task = [HBRunLoopTask runLoopTaskWithTarget:self action:@selector(runLoopTaskWithObject:) object:model];
+    if (identifier) {
+        cell = [collectionView dequeueReusableCellWithReuseIdentifier:identifier forIndexPath:indexPath];
+        if (!model.thumbnailImage) {
+            //添加一个下载图片解压缩图片任务
+            NSString *taskIdentifier = [NSString stringWithFormat:@"%@-decode",indexPath];
+            HBRunLoopTask *task = [HBRunLoopTask runLoopTaskWithIdentifier:taskIdentifier target:self action:@selector(runLoopDownloadAndDecodeImageAction:) object:model];
             [self.taskManager addTask:task];
         }else {
-            cell.imageView.image = model.cachedImage;
+            cell.image = model.thumbnailImage;
         }
     }
     return cell;
 }
 
-#pragma mark - RunLoop负责下载以及解压图片任务
-
-- (void)runLoopTaskWithObject:(HBTableViewCellImageModel *)object {
-    object.imageData = [NSData dataWithContentsOfURL:object.imageURL];
-    [object decodeImage];
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self.tableView reloadRowsAtIndexPaths:@[object.indexPath] withRowAnimation:(UITableViewRowAnimationAutomatic)];
-    });
+- (void)runLoopDownloadAndDecodeImageAction:(HBImageModel *)model {
+    if (!model.cachedImage) {
+        if (!model.imageData) {
+            model.imageData = [NSData dataWithContentsOfURL:model.imageURL];
+        }
+        [model decodeImage];
+        [model createThumbnailImageIfNeeded];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.collectionView performBatchUpdates:^{
+                NSArray<NSIndexPath *> *reloadIndexPaths = @[model.indexPath];
+                [self.collectionView reloadItemsAtIndexPaths:reloadIndexPaths];
+            } completion:nil];
+        });
+    }
 }
+
 @end
 
 ```
